@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $title ?? 'Parts Sync Platform' }}</title>
+    <title>@yield('title', 'Parts Sync Platform')</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
 </head>
@@ -32,7 +32,7 @@
 
     <main class="py-10">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            {{ $slot }}
+            @yield('content')
         </div>
     </main>
 
