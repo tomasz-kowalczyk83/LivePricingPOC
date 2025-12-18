@@ -15,14 +15,17 @@ class QuoteRequestForm extends Component
     public $vehicle_make = '';
     public $vehicle_model = '';
 
-    protected $rules = [
-        'buyer_name' => 'required|string|max:255',
-        'buyer_email' => 'required|email|max:255',
-        'part_description' => 'required|string',
-        'vehicle_year' => 'nullable|integer|min:1900|max:' . (date('Y') + 1),
-        'vehicle_make' => 'nullable|string|max:255',
-        'vehicle_model' => 'nullable|string|max:255',
-    ];
+    protected function rules()
+    {
+        return [
+            'buyer_name' => 'required|string|max:255',
+            'buyer_email' => 'required|email|max:255',
+            'part_description' => 'required|string',
+            'vehicle_year' => 'nullable|integer|min:1900|max:' . (date('Y') + 1),
+            'vehicle_make' => 'nullable|string|max:255',
+            'vehicle_model' => 'nullable|string|max:255',
+        ];
+    }
 
     public function submit()
     {
