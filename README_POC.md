@@ -280,3 +280,44 @@ This is a proof-of-concept application.
 ## 🤝 Contributing
 
 This is a POC for demonstration purposes.
+
+## 📦 Versioning
+
+This project follows [Semantic Versioning 2.0.0](https://semver.org/):
+- **MAJOR.MINOR.PATCH** (e.g., 1.0.0)
+- Current version: See `VERSION` file
+- Release history: See `CHANGELOG.md`
+
+### Version History
+- **v1.0.0** (2025-12-18): Initial release with all core features
+
+## 🤝 Contributing Guidelines
+
+### Commit Message Format
+This project uses [Conventional Commits](https://www.conventionalcommits.org/):
+
+```bash
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`
+
+**Examples:**
+```bash
+feat(suppliers): add webhook integration type
+fix(quotes): correct price comparison logic  
+docs(readme): update installation instructions
+```
+
+### Pull Request Process
+1. Create feature branch from `main`
+2. Use conventional commits for all changes
+3. Update CHANGELOG.md for user-facing changes
+4. Ensure all tests pass
+5. Submit PR with clear description
+
+See `PROJECT_CONTEXT.md` for detailed MCP instructions.
