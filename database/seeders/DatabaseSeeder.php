@@ -107,5 +107,44 @@ class DatabaseSeeder extends Seeder
         $this->command->info('- 2 Database suppliers with parts');
         $this->command->info('- 1 API supplier');
         $this->command->info('- 1 Manual supplier');
+
+        // Create test users for Filament panels
+        \App\Models\User::create([
+            'name' => 'Admin User',
+            'email' => 'admin@example.com',
+            'password' => bcrypt('password'),
+            'role' => 'admin',
+            'supplier_id' => null,
+        ]);
+
+        \App\Models\User::create([
+            'name' => 'AutoParts Vendor',
+            'email' => 'vendor1@example.com',
+            'password' => bcrypt('password'),
+            'role' => 'vendor',
+            'supplier_id' => $databaseSupplier->id,
+        ]);
+
+        \App\Models\User::create([
+            'name' => 'Quick Parts Vendor',
+            'email' => 'vendor2@example.com',
+            'password' => bcrypt('password'),
+            'role' => 'vendor',
+            'supplier_id' => $supplier2->id,
+        ]);
+
+        \App\Models\User::create([
+            'name' => 'Regular User',
+            'email' => 'user@example.com',
+            'password' => bcrypt('password'),
+            'role' => 'user',
+            'supplier_id' => null,
+        ]);
+
+        $this->command->info('✅ Created test users:');
+        $this->command->info('  Admin: admin@example.com / password');
+        $this->command->info('  Vendor 1: vendor1@example.com / password');
+        $this->command->info('  Vendor 2: vendor2@example.com / password');
+        $this->command->info('  User: user@example.com / password');
     }
 }
