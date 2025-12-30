@@ -1,31 +1,175 @@
 # Parts Sync Platform - POC
 
 ## Stack
-Laravel 12, Livewire 3, Reverb, Tailwind, MySQL, Redis Queue
+Laravel 12, Filament 4, Reverb, Tailwind 4, MySQL, Redis Queue, Horizon, Pulse
 
 ## Core Concept
-B2B parts sourcing platform that eliminates manual quoting by aggregating real-time pricing from suppliers with 3 integration types:
-- Database (instant query of uploaded catalog)
-- API (external system integration)  
-- Manual (human notification + response)
+B2B **automotive parts marketplace** that eliminates manual quoting by aggregating real-time pricing from multiple suppliers. Buyers (traders) can request quotes for specific car parts, and suppliers respond with pricing and availability in real-time.
+
+**Domain: Automotive Aftermarket Parts**
+- Year/Make/Model fitment (e.g., "Brake pads for 2019 Honda Civic")
+- Part categories: brakes, filters, batteries, suspension, etc.
+- SKU structure: `BRK-HON-CIV-2019-F` (category-make-model-year-position)
+
+## Supplier Integration Types
+- **Database**: Instant query of uploaded catalog
+- **API**: External system integration (future: TecDoc, PartsLogic)
+- **Manual**: Human notification + response via Filament panel
+
+## Quote System Architecture (Phased)
+
+### Phase 1: Single Product per Request (Current)
+Simple 1:1 relationship - one product per quote request.
+
+```
+QuoteRequest (trader_id, status, is_anonymous, expires_at, expected_responses_count, responses_count)
+    └── QuoteResponse[] (trader_id, quoted_price, stock_available, status, expires_at)
+```
+
+### Phase 2: Multi-Item Requests (Future)
+Support multiple products per request with partial supplier responses.
+
+```
+QuoteRequest (trader_id, status)
+    └── QuoteRequestItem[] (product_sku, quantity)
+          └── QuoteResponseItem[] (supplier_id, quoted_price, stock)
+```
+
+Suppliers can respond with partial quotes (only items they stock).
 
 ## Key Models
-- Supplier (integration_type, api_endpoint, notification_channels)
-- Part (supplier_id, sku, price, stock_quantity, fits_vehicle JSON)
-- QuoteRequest (buyer_id, part_description, vehicle_info, status)
-- QuoteResponse (quote_request_id, supplier_id, quoted_price, response_time_seconds)
+
+### Multitenancy (Filament)
+- Company (tenant) - traders belong to companies
+- Trader (user) - type: buyer | supplier
+- Trader has configurable default expiry settings
+
+### Vehicles & Parts
+- Vehicle (year, make, model)
+- Part (sku, name, category, description)
+- PartVehicleFitment (part_id, vehicle_id) - compatibility pivot
+
+### Quotes
+- QuoteRequest (trader_id, status, is_anonymous, expires_at, expected_responses_count, responses_count)
+- QuoteResponse (quote_request_id, trader_id, quoted_price, stock_available, status, expires_at, response_time_seconds)
+
+---
+
+## Business Rules
+
+### Quote Request Lifecycle
+
+**Statuses:** `pending` → `processing` → `completed` | `cancelled` | `expired`
+
+| Status | Description | Triggered By |
+|--------|-------------|--------------|
+| `pending` | Request created, not yet sent to suppliers | System (on create) |
+| `processing` | Sent to suppliers, awaiting responses | System (ProcessQuoteRequest job) |
+| `completed` | Buyer accepted a quote | Buyer action |
+| `cancelled` | Buyer cancelled the request | Buyer action |
+| `expired` | No decision made within time limit | System (scheduled job) |
+
+**Rules:**
+- A quote request MUST have at least one product SKU and quantity
+- A quote request MUST be associated with a buyer (trader)
+- When a request enters `processing`, response records are created for all active suppliers
+- A request can only be `completed` if at least one response is `accepted`
+- A request can be `cancelled` only while in `pending` or `processing` status
+
+### Quote Response Lifecycle
+
+**Statuses:** `pending` → `submitted` | `declined` | `timeout` → `accepted` | `rejected`
+
+| Status | Description | Triggered By |
+|--------|-------------|--------------|
+| `pending` | Awaiting supplier response | System (when request broadcast) |
+| `submitted` | Supplier provided price and availability | Supplier action |
+| `declined` | Supplier explicitly won't quote | Supplier action |
+| `timeout` | Supplier didn't respond in time | System (scheduled job) |
+| `accepted` | Buyer chose this quote | Buyer action |
+| `rejected` | Buyer chose a different supplier | System (when another accepted) |
+
+**Rules:**
+- A supplier can only submit ONE response per quote request
+- `quoted_price` and `stock_available` are REQUIRED when status is `submitted`
+- `response_time_seconds` is calculated automatically (request.created_at → response.updated_at)
+- When a response is `accepted`, all other `submitted` responses become `rejected`
+- A response can only be `accepted` if its status is `submitted`
+- Only responses with status `submitted` are shown in price comparison
+
+### Price Comparison
+
+**Rules:**
+- Best price = lowest `quoted_price` among `submitted` responses
+- Responses are ranked by price ascending
+- Stock availability is displayed but does not affect ranking
+- Response time is tracked for supplier performance metrics
+
+### Supplier Visibility
+
+**Rules:**
+- Suppliers only see quote requests in `processing` status
+- Suppliers do NOT see requests they have already responded to
+- Suppliers cannot see other suppliers' responses or pricing
+- Buyers can see all responses for their own requests
+- Anonymous requests hide buyer identity until quote is accepted
+
+### Quote Expiry
+
+**Hierarchical Configuration:**
+1. Per-item expiry (set when creating request/response)
+2. Trader default expiry (configurable in Settings page)
+3. Global config default (config/quotes.php)
+
+**Rules:**
+- Both QuoteRequest and QuoteResponse have `expires_at` timestamps
+- Expired quotes/requests cannot be accepted
+- Scheduled commands auto-expire stale items
+- Expiry can be set via dropdown presets or custom calendar picker
+
+### Action Classes Pattern
+
+Business logic is encapsulated in action classes:
+- `App\Actions\QuoteResponse\SubmitQuoteAction` - Submit quote with event dispatch
+- `App\Actions\QuoteResponse\DeclineQuoteAction` - Decline quote with event dispatch
+- `App\Actions\QuoteResponse\AcceptQuoteAction` - Buyer accepts a quote
+
+### Events
+
+- `QuoteResponseSubmitted` - Fired when supplier submits a quote
+- `QuoteResponseDeclined` - Fired when supplier declines a quote
+- `QuoteRequestExpired` - Fired when a request expires
+- `QuoteResponseTimedOut` - Fired when a response times out
+
+---
 
 ## Features
 1. Multi-type supplier integration (3 patterns)
 2. Real-time quote aggregation (Reverb WebSockets)
 3. Analytics dashboards (supplier performance, buyer intelligence)
 4. Smart price comparison
+5. Quote expiry with hierarchical configuration
+6. Anonymous buyer requests
+7. Trader settings for default expiry values
+
+## Filament Panels
+
+### Vendor Panel (Traders)
+- **Buyers** see: My Quote Requests, Settings
+- **Suppliers** see: My Quote Responses, Settings
+- Navigation filtered by trader type
+
+### Admin Panel
+- Full access to all resources
+- User management
 
 ## Integration Service Pattern
 SupplierIntegrationInterface → DatabaseSupplierIntegration, ApiSupplierIntegration, ManualSupplierIntegration
 
 ## Job Flow
 QuoteRequest → ProcessQuoteRequest → ProcessSupplierQuote (per supplier) → Response saved → Broadcast
+
+**Safety Check:** ProcessQuoteRequest excludes suppliers from the same company as the buyer.
 
 ## Design
 Professional B2B (Stripe/Linear style), card-based, blue/gray palette, mobile-first

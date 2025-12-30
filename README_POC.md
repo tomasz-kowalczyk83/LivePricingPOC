@@ -12,6 +12,9 @@ A B2B parts sourcing platform that eliminates manual quoting by aggregating real
 
 - **Real-Time Quote Aggregation**: Live updates via Reverb WebSockets
 - **Smart Price Comparison**: Automatically identifies best quotes
+- **Quote Expiry System**: Hierarchical expiry configuration (global → trader → per-item)
+- **Anonymous Buyer Requests**: Hide buyer identity until quote is accepted
+- **Trader Settings**: Configurable default expiry values per trader
 - **Analytics Dashboard**: Supplier performance metrics and buyer intelligence
 - **Professional B2B UI**: Clean, card-based design with Tailwind CSS
 
@@ -24,65 +27,128 @@ A B2B parts sourcing platform that eliminates manual quoting by aggregating real
 ## 🛠 Tech Stack
 
 - **Laravel 12**: Backend framework
-- **Livewire 3**: Reactive components
+- **Filament 4**: Admin panels (Vendor, Admin)
 - **Reverb**: WebSocket server for real-time updates
-- **Tailwind CSS**: UI styling
+- **Tailwind CSS 4**: UI styling
 - **MySQL/SQLite**: Database
 - **Redis Queue**: Job processing
+- **Horizon**: Queue monitoring
+- **Pulse**: Application performance monitoring
 
 ## 📁 Project Structure
 
 ```
 app/
+├── Actions/
+│   └── QuoteResponse/
+│       ├── SubmitQuoteAction.php           # Submit quote with event dispatch
+│       ├── DeclineQuoteAction.php          # Decline quote with event dispatch
+│       └── AcceptQuoteAction.php           # Buyer accepts a quote
+├── Concerns/
+│   └── HasExpiry.php                       # Shared trait for expiry logic
+├── Console/Commands/
+│   ├── ExpireQuoteRequestsCommand.php      # Expire stale requests
+│   ├── TimeoutQuoteResponsesCommand.php    # Timeout stale responses
+│   └── ProcessOutboxCommand.php            # Process outbox events
+├── Enums/
+│   ├── QuoteRequestStatusEnum.php          # Request statuses
+│   ├── QuoteResponseStatusEnum.php         # Response statuses
+│   └── TraderTypeEnum.php                  # Buyer/Supplier types
 ├── Events/
-│   └── QuoteResponseReceived.php         # Broadcast event for real-time updates
+│   ├── QuoteResponseSubmitted.php          # Fired when supplier submits
+│   ├── QuoteResponseDeclined.php           # Fired when supplier declines
+│   ├── QuoteRequestExpired.php             # Fired when request expires
+│   └── QuoteResponseTimedOut.php           # Fired when response times out
+├── Filament/
+│   └── Vendor/
+│       ├── Pages/
+│       │   └── TraderSettings.php          # Settings page for traders
+│       └── Resources/
+│           ├── QuoteRequests/              # Buyer's quote requests
+│           └── QuoteResponses/             # Supplier's quote responses
 ├── Jobs/
-│   ├── ProcessQuoteRequest.php            # Dispatches quotes to all suppliers
-│   └── ProcessSupplierQuote.php           # Processes individual supplier quote
-├── Livewire/
-│   ├── Dashboard.php                       # Analytics dashboard component
-│   ├── QuoteRequestForm.php                # Quote request form component
-│   └── QuoteRequestShow.php                # Real-time quote display component
+│   ├── ProcessQuoteRequest.php             # Dispatches quotes to suppliers
+│   ├── ProcessSupplierQuote.php            # Processes individual quote
+│   └── ProcessOutboxEvents.php             # Process outbox events
 ├── Models/
-│   ├── Supplier.php                        # Supplier model with integration type
-│   ├── Part.php                            # Part catalog model
+│   ├── Company.php                         # Tenant model
+│   ├── Trader.php                          # Buyer/Supplier model
 │   ├── QuoteRequest.php                    # Quote request model
-│   └── QuoteResponse.php                   # Supplier response model
+│   ├── QuoteResponse.php                   # Supplier response model
+│   └── OutboxEvent.php                     # Transactional outbox
 └── Services/
-    └── SupplierIntegrations/
-        ├── SupplierIntegrationInterface.php    # Integration contract
-        ├── DatabaseSupplierIntegration.php     # Database integration
-        ├── ApiSupplierIntegration.php          # API integration
-        ├── ManualSupplierIntegration.php       # Manual integration
-        └── SupplierIntegrationFactory.php      # Factory for creating integrations
+    └── OutboxEventService.php              # Record outbox events
 ```
 
 ## 🗄 Database Schema
 
-### Suppliers
-- `integration_type`: database | api | manual
-- `api_endpoint`: API URL (for API type)
-- `notification_channels`: JSON array (for manual type)
+### Companies (Tenants)
+- Multitenancy via Filament - traders belong to companies
+
+### Traders (Users)
+- `type`: buyer | supplier
+- `is_active`: Boolean
+- `default_request_expiry_minutes`: Default expiry for quote requests
+- `default_response_expiry_minutes`: Default expiry for quote responses
+- Belongs to a Company
+
+### Vehicles
+- `year`, `make`, `model`: Vehicle identification
+- Used for part fitment matching
 
 ### Parts
-- `supplier_id`: Foreign key to suppliers
-- `sku`: Stock keeping unit
-- `price`: Current price
-- `stock_quantity`: Available stock
-- `fits_vehicle`: JSON (year, make, model)
+- `sku`: Stock keeping unit (e.g., `BRK-HON-CIV-2019-F`)
+- `name`, `category`, `description`
+- Linked to vehicles via `PartVehicleFitment` pivot
 
 ### QuoteRequests
-- `buyer_name`, `buyer_email`: Buyer information
-- `part_description`: What they're looking for
-- `vehicle_info`: JSON (optional vehicle details)
-- `status`: pending | processing | completed | failed
+- `trader_id`: Buyer who created the request
+- `is_anonymous`: Hide buyer identity from suppliers
+- `expires_at`: When the request expires
+- `expected_responses_count`: Number of suppliers contacted
+- `responses_count`: Number of responses received
+- `status`: See workflow below
 
 ### QuoteResponses
 - `quote_request_id`: Foreign key to quote requests
-- `supplier_id`: Foreign key to suppliers
-- `quoted_price`: Supplier's price
+- `trader_id`: Supplier responding
+- `quoted_price`, `stock_available`: The quote
+- `expires_at`: When the quote expires
 - `response_time_seconds`: How fast they responded
-- `status`: pending | received | timeout
+- `status`: See workflow below
+
+## 📋 Quote Workflow
+
+### Quote Request Status Flow
+```
+pending → processing → completed
+                    ↘ cancelled
+                    ↘ expired
+```
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Created, not yet sent to suppliers |
+| `processing` | Sent to suppliers, awaiting responses |
+| `completed` | Buyer accepted a quote |
+| `cancelled` | Buyer cancelled the request |
+| `expired` | No decision made in time |
+
+### Quote Response Status Flow
+```
+pending → submitted → accepted
+       ↘ declined   ↘ rejected
+       ↘ timeout
+```
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Awaiting supplier response |
+| `submitted` | Supplier provided price/availability |
+| `declined` | Supplier won't quote |
+| `timeout` | No response in time |
+| `accepted` | Buyer chose this quote |
+| `rejected` | Buyer chose different supplier |
 
 ## 🎯 How It Works
 
