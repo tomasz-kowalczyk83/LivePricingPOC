@@ -11,7 +11,15 @@
 /.phpunit.cache
 /.vscode
 /.zed
+/.claude
+/.cursor
+/.junie
+/.mcp.json
 /auth.json
+/nul
+/public/css
+/public/fonts
+/public/js
 /node_modules
 /public/build
 /public/hot

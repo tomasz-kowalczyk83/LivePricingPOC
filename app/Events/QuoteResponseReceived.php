@@ -15,13 +15,12 @@ class QuoteResponseReceived implements ShouldBroadcast
 
     public function __construct(
         public QuoteResponse $quoteResponse
-    ) {
-    }
+    ) {}
 
     public function broadcastOn(): array
     {
         return [
-            new Channel('quote-request.' . $this->quoteResponse->quote_request_id),
+            new Channel('quote-request.'.$this->quoteResponse->quote_request_id),
         ];
     }
 
@@ -29,8 +28,8 @@ class QuoteResponseReceived implements ShouldBroadcast
     {
         return [
             'id' => $this->quoteResponse->id,
-            'supplier_id' => $this->quoteResponse->supplier_id,
-            'supplier_name' => $this->quoteResponse->supplier->name,
+            //            'supplier_id' => $this->quoteResponse->supplier_id,
+            //            'supplier_name' => $this->quoteResponse->supplier->name,
             'quoted_price' => $this->quoteResponse->quoted_price,
             'stock_available' => $this->quoteResponse->stock_available,
             'response_time_seconds' => $this->quoteResponse->response_time_seconds,

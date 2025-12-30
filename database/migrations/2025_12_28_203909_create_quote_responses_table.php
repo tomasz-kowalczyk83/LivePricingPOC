@@ -14,12 +14,12 @@ return new class extends Migration
         Schema::create('quote_responses', function (Blueprint $table) {
             $table->id();
             $table->foreignId('quote_request_id')->constrained()->onDelete('cascade');
-            $table->foreignId('supplier_id')->constrained()->onDelete('cascade');
+            $table->foreignId('trader_id')->constrained()->onDelete('cascade');
             $table->decimal('quoted_price', 10, 2)->nullable();
             $table->integer('stock_available')->nullable();
             $table->integer('response_time_seconds')->nullable();
             $table->text('notes')->nullable();
-            $table->enum('status', ['pending', 'received', 'timeout'])->default('pending');
+            $table->string('status')->default('pending');
             $table->timestamps();
         });
     }

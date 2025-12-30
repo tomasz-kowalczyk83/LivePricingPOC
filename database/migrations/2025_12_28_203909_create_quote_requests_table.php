@@ -13,11 +13,8 @@ return new class extends Migration
     {
         Schema::create('quote_requests', function (Blueprint $table) {
             $table->id();
-            $table->string('buyer_name');
-            $table->string('buyer_email');
-            $table->text('part_description');
-            $table->json('vehicle_info')->nullable();
-            $table->enum('status', ['pending', 'processing', 'completed', 'failed'])->default('pending');
+            $table->foreignId('trader_id')->constrained()->onDelete('cascade');
+            $table->string('status')->default('pending');
             $table->integer('responses_count')->default(0);
             $table->timestamps();
         });
