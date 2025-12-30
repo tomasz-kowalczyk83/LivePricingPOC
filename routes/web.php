@@ -1,11 +1,11 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
 use App\Models\QuoteRequest;
+use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return redirect()->route('dashboard');
-});
+// Route::get('/', function () {
+//    return redirect()->route('dashboard');
+// });
 
 Route::get('/dashboard', function () {
     return view('pages.dashboard');
